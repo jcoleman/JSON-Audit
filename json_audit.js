@@ -5,6 +5,7 @@ JSONAudit = {
   enable: function() {
     // Bind key-trigger for popping up view...
     document.observe('keypress', function(event) {
+      // Open on Meta-Shift-A
       if (event.metaKey && event.shiftKey && event.keyCode == 97) {
         event.stop();
         
