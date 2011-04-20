@@ -5,7 +5,8 @@ JSONAudit = {
   enable: function() {
     // Bind key-trigger for popping up view...
     $j(document).keydown(function (e) {
-      if (e.metaKey && e.shiftKey && e.which == 65) {
+      // Alt-Shift-A launches/closes the viewer.
+      if (e.altKey && e.shiftKey && e.which == 65) {
         if (jQuery('#json-audit').length) {
           console.log('Closing JSON Audit Viewer');
           jQuery('#json-audit').remove();
