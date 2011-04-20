@@ -4,19 +4,16 @@ JSONAudit = {
   
   enable: function() {
     // Bind key-trigger for popping up view...
-    document.observe('keypress', function(event) {
-      // Open on Meta-Shift-A
-      if (event.metaKey && event.shiftKey && event.keyCode == 97) {
-        event.stop();
-        
-        if (JSONAudit.currentElement) {
+    $j(document).keydown(function (e) {
+      if (e.metaKey && e.shiftKey && e.which == 65) {
+        if (jQuery('#json-audit').length) {
           console.log('Closing JSON Audit Viewer');
-          JSONAudit.currentElement.remove();
-          JSONAudit.currentElement = null;
+          jQuery('#json-audit').remove();
         } else {
           console.log('Opening JSON Audit Viewer');
           JSONAudit.openViewer();
         }
+        e.preventDefault();
       }
     });
   },
@@ -30,60 +27,51 @@ JSONAudit = {
   },
   
   openViewer: function() {
-    var el = new Element('div', {style: 'text-align: left; background-color: white; position: absolute; top: 0; left: 0; z-index: 100;'});
+    var inner = JSONAudit.auditors.inject('', function(acc, cur, index) {
+      return acc + '<h5>' + (cur.name || ('JSON Auditor #' + index)) + '</h5>' + cur.toString();
+    }) || '<h5>No JSON Auditors</h5>';
     
-    el.update(
-      JSONAudit.auditors.inject('', function(acc, cur, index) {
-        return acc + '<div id="json-audit"><h5>' + (cur.name || ('JSON Auditor #' + index)) + '</h5>' + cur.toString() + '</div>';
-      }) || '<div id="json-audit"><h5>No JSON Auditors</h5></div>'
-    );
-    
-    document.body.insert({top: el});
-    
-    JSONAudit.currentElement = el;
+    var container = '<div id="json-audit" style="text-align: left; background-color: white; position: absolute; top: 0; left: 0; z-index: 100;">'
+    jQuery(document.body).prepend(container + inner + '</div>');
   },
-  
-  currentElement: null,
   
   auditors: []
   
 };
 
-JSONAuditor = Class.create({
-  
-  initialize: function(object, name) {
+JSONAuditor = function(object, name) {
+  this.initialize = function(object, name) {
     this.name = name;
-    
+  
     if (this.isPrimitive(object)) {
       throw new Error('JSONAudit can only be instantiated with objects or arrays--not primitives.');
     }
     this.tracker = {};
     this.attach(object, this.tracker);
-  },
-  
-  attach: function(object, tracker) {
+  };
+
+  this.attach = function(object, tracker) {
     var self = this;
-    
+  
     tracker.value = object;
-    
-    if (Object.isArray(object)) {
+  
+    if (this.isPrimitive(object)) {
+      // Don't do anything special here for primitives.
+    } else if (object.constructor === Array) {
       tracker.nodes = [];
-      object.each(function(value, index) {
+      jQuery.each(object, function(index, value) {
         var nextTracker = {};
         tracker.nodes.push(nextTracker);
-        
+      
         self.attach(value, nextTracker);
       });
-    } else if (this.isPrimitive(object)) {
-      // Don't do anything special here for primitives.
     } else {
       tracker.nodes = {};
-      Object.keys(object).each(function(key) {
-        var value = object[key];
+      jQuery.each(object, function(key, value) {
         var nextTracker = tracker.nodes[key] = {};
-        
+      
         self.attach(value, nextTracker);
-        
+      
         object.__defineGetter__(key, function() {
           nextTracker.accessed = true;
           return value;
@@ -95,51 +83,51 @@ JSONAuditor = Class.create({
         });
       });
     }
-    
+  
     // Do this at the end, since by recursing into the object
     // we could easily trigger the accessor methods that set
     // the 'accessed' property to true.
     // Technically the code currently doesn't do this as described,
     // but better safer than sorry on a later modification.
     tracker.accessed = false;
-  },
-  
-  isPrimitive: function(object) {
-    return Object.isNumber(object)
-           || Object.isString(object)
-           || object === undefined
+  };
+
+  this.isPrimitive = function(object) {
+    return object === undefined
            || object === null
-           || (object.constructor && object.constructor === Date);
-  },
-  
-  toString: function() {
+           || object.constructor === String
+           || object.constructor === Number
+           || object.constructor === Date;
+  };
+
+  this.toString = function() {
     return '<pre>' + this.getStringForTracker(this.tracker, 0) + '</pre>';
-  },
-  
-  getStringForTracker: function(tracker, currentIndentation) {
+  };
+
+  this.getStringForTracker = function(tracker, currentIndentation) {
     var self = this;
     var str = '';
     var indentation = '  '.times(currentIndentation);
-    
+  
     if (this.isPrimitive(tracker.value)) {
       // This is a primitive value...
       str += indentation + tracker.value + '\n';
-    } else if (Object.isArray(tracker.nodes)) {
+    } else if (tracker.nodes.constructor === Array) {
       str += indentation + 'Array:\n';
-      tracker.nodes.each(function (node) {
+      jQuery.each(tracker.nodes, function (index, node) {
         str += indentation + '- ' + self.getStringForTracker(node, currentIndentation + 1);
       });
       str += '\n';
     } else {
       str += 'Object:\n';
-      Object.keys(tracker.nodes).each(function(key) {
-        var node = tracker.nodes[key];
+      jQuery.each(tracker.nodes, function(key, node) {
         str += indentation + '(<span style="color: '+ (node.accessed ? 'red' : 'grey') + ';">' + key + '</span>): ' + self.getStringForTracker(node, currentIndentation + 1);
       });
       str += '\n';
     }
-    
-    return str;
-  }
   
-});
+    return str;
+  };
+  
+  this.initialize(object, name);
+};
